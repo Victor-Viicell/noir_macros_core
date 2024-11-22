@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/noir_macros_core.svg)](https://crates.io/crates/noir_macros_core)
 [![Documentation](https://docs.rs/noir_macros_core/badge.svg)](https://docs.rs/noir_macros_core)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT.svg)](LICENSE)
 
 Essential procedural macros and utilities for no_std Rust development, part of the Noir Framework.
 
