@@ -1,6 +1,6 @@
 [package]
 name = "noir_macros_core"
-version = "1.1.0"
+version = "1.1.1"
 edition = "2021"
 description = "Essential proc-macros and utilities for no_std Rust development"
 authors = ["Viicell and Noir Framework Contributors"]

@@ -533,11 +533,11 @@ macro_rules! print {
         static PRINT_BUFFER: $crate::StaticCell<$crate::Buffer> = $crate::StaticCell::new();
         
         // Initialize buffer if needed
-        if PRINT_BUFFER.try_init($crate::Buffer::new()) {
+        if PRINT_BUFFER.try_init($crate::Buffer::with_capacity($crate::DEFAULT_BUFFER_SIZE)) {
             // First time initialization
         }
         
-        // Format and write to buffer
+        // Get reference to buffer and format string
         if let Some(buffer) = PRINT_BUFFER.get() {
             unsafe {
                 *buffer.pos.get() = 0;
@@ -664,8 +664,11 @@ impl core::fmt::Write for PrintWrapper {
     }
 }
 
-const DEFAULT_BUFFER_SIZE: usize = 8 * 1024;
-const MAX_BUFFER_SIZE: usize = 1024 * 1024;
+/// The default size for new buffers.
+pub const DEFAULT_BUFFER_SIZE: usize = 8 * 1024;
+
+/// The maximum allowed buffer size.
+pub const MAX_BUFFER_SIZE: usize = 1024 * 1024;
 
 /// A buffer for storing formatted strings with configurable size.
 #[doc(hidden)]
@@ -676,22 +679,22 @@ pub struct Buffer {
 }
 
 impl Buffer {
+    /// Creates a new buffer with the default capacity.
+    pub fn new() -> Self {
+        Self::with_capacity(DEFAULT_BUFFER_SIZE)
+    }
+
     /// Creates a new buffer with the specified capacity.
     /// 
     /// # Safety
     /// The capacity must be less than or equal to MAX_BUFFER_SIZE.
-    pub const unsafe fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         assert!(capacity <= MAX_BUFFER_SIZE, "Buffer capacity exceeds maximum allowed size");
         Self {
-            buf: UnsafeCell::new(Vec::new()),
+            buf: UnsafeCell::new(Vec::with_capacity(capacity)),
             pos: UnsafeCell::new(0),
             capacity,
         }
-    }
-
-    /// Creates a new buffer with the default capacity.
-    pub const fn new() -> Self {
-        unsafe { Self::with_capacity(DEFAULT_BUFFER_SIZE) }
     }
 
     /// Returns true if the buffer has enough space for additional bytes.
@@ -709,7 +712,8 @@ impl Buffer {
             
             if new_size <= MAX_BUFFER_SIZE {
                 let buf = &mut *self.buf.get();
-                buf.reserve(new_size - buf.capacity());
+                buf.reserve(new_size - buf.len());
+                buf.resize(new_size, 0);
                 true
             } else {
                 false
@@ -718,8 +722,11 @@ impl Buffer {
     }
 }
 
-// SAFETY: Access to the buffer is synchronized through StaticCell
-// and we ensure single-threaded access to the buffer during writes
+// SAFETY: Access to Buffer is synchronized through StaticCell and we ensure
+// single-threaded access during writes through atomic operations.
+// The Buffer is effectively immutable between writes due to the StaticCell
+// synchronization, and all modifications are done through UnsafeCell which
+// provides interior mutability in a controlled manner.
 unsafe impl Sync for Buffer {}
 
 impl core::fmt::Write for Buffer {
@@ -734,7 +741,8 @@ impl core::fmt::Write for Buffer {
         unsafe {
             let buf = &mut *self.buf.get();
             if buf.len() < pos + bytes.len() {
-                buf.extend_from_slice(&[0; 8]); // Grow in small chunks
+                let new_len = (pos + bytes.len()).next_power_of_two();
+                buf.resize(new_len, 0);
             }
             buf[pos..pos + bytes.len()].copy_from_slice(bytes);
             *self.pos.get() = pos + bytes.len();
@@ -760,7 +768,8 @@ pub fn write(buffer: &Buffer, args: core::fmt::Arguments) -> core::fmt::Result {
             unsafe {
                 let buf = &mut *self.0.buf.get();
                 if buf.len() < pos + bytes.len() {
-                    buf.extend_from_slice(&[0; 8]); // Grow in small chunks
+                    let new_len = (pos + bytes.len()).next_power_of_two();
+                    buf.resize(new_len, 0);
                 }
                 buf[pos..pos + bytes.len()].copy_from_slice(bytes);
                 *self.0.pos.get() = pos + bytes.len();
@@ -1053,6 +1062,12 @@ mod tests {
     fn test_print_wrapper() {
         let mut pw = PrintWrapper;
         assert!(pw.write_str("test").is_ok());
+        
+        // Test buffer allocation and growth
+        let buf = Buffer::new();
+        assert!(buf.has_capacity(DEFAULT_BUFFER_SIZE));
+        assert!(buf.try_grow(DEFAULT_BUFFER_SIZE));
+        assert!(!buf.try_grow(MAX_BUFFER_SIZE + 1));
     }
 
     /// Tests bitflags macro functionality.

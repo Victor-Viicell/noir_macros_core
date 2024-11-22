@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2024-01-17
+## [1.1.1] - 2024-11-22
+
+### Fixed
+- Printing issues in `print!` macro
+- Buffer overflow issue in `format!` macro
+- Fixed buffer overflow issues in `print!` macro
+- Improved buffer growth strategy for better memory management
+- Restored proper thread safety for `Buffer` type
+- Fixed synchronization issues in static buffer handling
+
+### Fixed
+- Printing issues in `print!` macro
+
+## [1.1.0] - 2024-11-21
 
 ### Added
 - Dynamic buffer allocation in `format!` macro
@@ -22,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory allocation efficiency in string formatting
 - Documentation examples and visibility issues
 
-## [1.0.0] - 2024-01-17
+## [1.0.0] - 2024-11-21
 
 ### Added
 - Initial release

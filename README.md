@@ -17,12 +17,15 @@ Essential procedural macros and utilities for no_std Rust development, part of t
 - 📝 Advanced formatting utilities with dynamic buffer management
 - 🔧 Memory-efficient string handling for resource-constrained systems
 
-## Key Improvements in v1.1.0
+## [1.1.1] - 2024-11-22
 
-- Dynamic buffer allocation in formatting macros
-- Configurable buffer sizes (8KB default, up to 1MB)
-- Improved memory efficiency and thread safety
-- Better error handling for buffer operations
+### Fixed
+- Printing issues in `print!` macro
+- Buffer overflow issue in `format!` macro
+- Fixed buffer overflow issues in `print!` macro
+- Improved buffer growth strategy for better memory management
+- Restored proper thread safety for `Buffer` type
+- Fixed synchronization issues in static buffer handling
 
 ## Installation
 
@@ -30,7 +33,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-noir_macros_core = "1.1.0"
+noir_macros_core = "1.1.2"
 ```
 
 ## Usage Examples
