@@ -529,14 +529,64 @@ macro_rules! array {
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => {{
-        // Validate format string at compile time
-        let _ = {
-            #[allow(unused_imports)]
-            use core::fmt::Write;
-            let mut _pw = $crate::PrintWrapper {};
-            core::fmt::write(&mut _pw, core::format_args!($($arg)*))
-        };
+        // Create a static buffer for output
+        static PRINT_BUFFER: $crate::StaticCell<$crate::Buffer> = $crate::StaticCell::new();
+        
+        // Initialize buffer if needed
+        if PRINT_BUFFER.try_init($crate::Buffer::new()) {
+            // First time initialization
+        }
+        
+        // Format and write to buffer
+        if let Some(buffer) = PRINT_BUFFER.get() {
+            unsafe {
+                *buffer.pos.get() = 0;
+                let _ = $crate::write(buffer, core::format_args!($($arg)*));
+                let output = core::str::from_utf8_unchecked(&(*buffer.buf.get())[..*buffer.pos.get()]);
+                $crate::_print(output);
+            }
+        }
     }};
+}
+
+/// Internal function to handle actual printing.
+#[doc(hidden)]
+pub fn _print(s: &str) {
+    // Implementation depends on target platform
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Web assembly implementation
+        extern "C" {
+            fn console_log(ptr: *const u8, len: usize);
+        }
+        unsafe {
+            console_log(s.as_ptr(), s.len());
+        }
+    }
+    
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // Default implementation using core::fmt::Write
+        use core::fmt::Write;
+        struct Stdout;
+        
+        impl Write for Stdout {
+            fn write_str(&mut self, s: &str) -> core::fmt::Result {
+                extern "C" {
+                    fn putchar(c: i32) -> i32;
+                }
+                for byte in s.bytes() {
+                    unsafe {
+                        putchar(byte as i32);
+                    }
+                }
+                Ok(())
+            }
+        }
+        
+        let mut stdout = Stdout;
+        let _ = stdout.write_str(s);
+    }
 }
 
 /// Prints formatted text to the standard output, with a newline.
