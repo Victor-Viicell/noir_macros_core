@@ -2,21 +2,21 @@
 
 [![Crates.io](https://img.shields.io/crates/v/noir_macros_core.svg)](https://crates.io/crates/noir_macros_core)
 [![Documentation](https://docs.rs/noir_macros_core/badge.svg)](https://docs.rs/noir_macros_core)
-[![License](https://img.shields.io/badge/license-MIT.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Essential procedural macros and utilities for no_std Rust development, part of the Noir Framework.
+Essential procedural macros and utilities for no_std Rust development, part of the Noir Framework. This crate provides zero-dependency, thread-safe utilities designed specifically for embedded and no_std environments.
 
 ## Features
 
-- 🚀 Zero external dependencies
-- 💻 100% no_std compatible
-- 🛡️ Thread-safe static initialization with `Default` trait support
+- 🚀 Zero external dependencies for minimal footprint
+- 💻 Full no_std compatibility for embedded systems
+- 🛡️ Thread-safe static initialization with `StaticCell`
 - ⚡ Compile-time memory layout assertions
 - 🔒 Strong safety guarantees through Rust's type system
-- 📦 Robust bit flag operations
+- 📦 Robust bit flag operations and manipulation
 - 🧰 Comprehensive formatting utilities for no_std environments
 
-## Usage
+## Installation
 
 Add this to your `Cargo.toml`:
 
@@ -25,108 +25,61 @@ Add this to your `Cargo.toml`:
 noir_macros_core = "1.0.0"
 ```
 
-## Key Features
+## Quick Start
 
 ### Thread-Safe Static Initialization
 
 ```rust
 use noir_macros_core::StaticCell;
 
-// Using the Default trait (new in 1.0.0)
-let cell: StaticCell<i32> = Default::default();
-assert!(cell.try_init(42));
+// Using StaticCell with Default trait
+static CONFIG: StaticCell<String> = StaticCell::new();
 
-// Or using the static_cell macro
-static_cell!(CONFIG: &str);
-
-fn init() {
-    // Only the first thread will succeed in initialization
-    if CONFIG.try_init("production") {
-        // Successfully initialized
+fn init_config() {
+    // Thread-safe initialization
+    if CONFIG.try_init(String::from("production")) {
+        println!("Configuration initialized");
     }
     
-    // All threads can safely read the value
+    // Safe concurrent access
     if let Some(config) = CONFIG.get() {
         println!("Current config: {}", config);
     }
 }
 ```
 
-### Memory Safety and Optimization
-
-```rust
-use noir_macros_core::{const_assert_size, const_assert_align};
-
-#[repr(C)]
-struct CriticalData {
-    flags: u32,    // 4 bytes
-    active: bool,  // 1 byte
-    _pad: [u8; 3], // 3 bytes padding
-}
-
-// Verify memory layout at compile-time
-const_assert_size!(CriticalData, 8);   // Ensure total size
-const_assert_align!(CriticalData, 4);  // Ensure alignment
-```
-
-### Type-Safe Bit Flags
+### Bit Flag Operations
 
 ```rust
 use noir_macros_core::bitflags;
 
 bitflags! {
-    /// Process capabilities
-    pub struct Capabilities: u32 {
-        const READ_FILES  = 0b0001;
-        const WRITE_FILES = 0b0010;
-        const NETWORK     = 0b0100;
+    pub struct Permissions: u32 {
+        const READ = 0b001;
+        const WRITE = 0b010;
+        const EXECUTE = 0b100;
     }
 }
 
-// Type system ensures flags can only be combined safely
-let caps = Capabilities::READ_FILES | Capabilities::WRITE_FILES;
-assert!(caps.contains(Capabilities::READ_FILES));
+let mut perms = Permissions::READ | Permissions::WRITE;
+assert!(perms.contains(Permissions::READ));
 ```
 
-## Implementation Details
+## Safety and Guarantees
 
-### Memory Ordering
-
-The crate carefully chooses memory orderings for atomic operations to ensure thread safety:
-
-```rust
-use core::sync::atomic::Ordering;
-
-// Reading uses Acquire ordering to sync with initialization
-let value = atomic.load(Ordering::Acquire);
-
-// Initialization uses AcqRel for bidirectional synchronization
-let result = atomic.compare_exchange(
-    false, true,
-    Ordering::AcqRel,
-    Ordering::Relaxed
-);
-```
-
-### Safety Guarantees
-
-- Thread-safety through atomic operations
-- Memory safety via proper alignment and access patterns
-- Type safety using Rust's type system
-- Compile-time guarantees where possible
-- Zero unsafe code in public APIs
-
-### No-std Support
-
-Designed for environments without the standard library:
-- Embedded systems
-- Operating system development
-- Resource-constrained platforms
+- Thread-safe initialization through atomic operations
+- Compile-time checks for memory layout and alignment
+- Zero runtime overhead for most operations
+- Safe concurrent access to static variables
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+We welcome contributions! Please feel free to submit a Pull Request.
 
 ## License
 
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Credits
+
+Created and maintained by Viicell and the Noir Framework Contributors.
