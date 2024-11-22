@@ -1,6 +1,6 @@
 [package]
 name = "noir_macros_core"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 description = "Essential proc-macros and utilities for no_std Rust development"
 authors = ["Viicell and Noir Framework Contributors"]
@@ -10,3 +10,9 @@ documentation = "https://docs.rs/noir_macros_core"
 readme = "README.md"
 keywords = ["no_std", "macros", "proc-macro", "embedded", "noir"]
 categories = ["no-std", "embedded", "development-tools::procedural-macro-helpers"]
+
+[features]
+default = ["alloc"]
+alloc = []
+
+[dependencies]

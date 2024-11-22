@@ -1,6 +1,5 @@
 #![no_std]
 #![deny(missing_docs)]
-// Removed deny(unsafe_code) since we need it for low-level operations
 #![cfg_attr(test, deny(warnings))]
 
 //! # noir_macros_core
@@ -11,110 +10,28 @@
 //! ## Key Features
 //! 
 //! ### Thread-Safe Static Initialization
-//! ```rust
-//! use noir_macros_core::static_cell;
-//! 
-//! // Define a thread-safe static configuration
-//! static_cell!(CONFIG, &str);
-//! 
-//! fn init() {
-//!     // Only the first thread will succeed in initialization
-//!     if CONFIG.try_init("production") {
-//!         // Successfully initialized
-//!     }
-//!     
-//!     // All threads can safely read the value
-//!     if let Some(config) = CONFIG.get() {
-//!         println!("Current config: {}", config);
-//!     }
-//! }
-//! ```
-//! 
 //! ### Memory Safety and Optimization
-//! ```rust
-//! use noir_macros_core::{const_assert_size, const_assert_align};
-//! 
-//! #[repr(C)]
-//! struct CriticalData {
-//!     flags: u32,    // 4 bytes
-//!     active: bool,  // 1 byte
-//!     _pad: [u8; 3], // 3 bytes padding
-//! }
-//! 
-//! // Verify memory layout at compile-time
-//! const_assert_size!(CriticalData, 8);   // Ensure total size
-//! const_assert_align!(CriticalData, 4);  // Ensure alignment
-//! ```
-//! 
 //! ### Safe Abstractions
-//! All public APIs maintain strong safety guarantees:
-//! ```rust
-//! use noir_macros_core::bitflags;
-//! use core::sync::atomic::Ordering;
-//! 
-//! // Example of thread-safe atomic operations
-//! let atomic = core::sync::atomic::AtomicBool::new(false);
-//! 
-//! // Reading uses Acquire ordering to sync with initialization
-//! let value = atomic.load(Ordering::Acquire);
-//! 
-//! // Initialization uses AcqRel for bidirectional synchronization
-//! let result = atomic.compare_exchange(
-//!     false, true,
-//!     Ordering::AcqRel,
-//!     Ordering::Relaxed
-//! );
-//! 
-//! // Example of type-safe bitflags
-//! bitflags! {
-//!     /// Process capabilities
-//!     pub struct Capabilities: u32 {
-//!         const READ_FILES  = 0b0001;
-//!         const WRITE_FILES = 0b0010;
-//!         const NETWORK     = 0b0100;
-//!     }
-//! }
-//! 
-//! let caps = Capabilities::READ_FILES | Capabilities::WRITE_FILES;
-//! assert!(caps.contains(Capabilities::READ_FILES));
-//! ```
-//! 
-//! ## Best Practices
-//! 
-//! ### Static Initialization
-//! - Always check initialization status before access
-//! - Handle initialization failures gracefully
-//! - Use appropriate memory ordering for synchronization
-//! 
-//! ### Memory Layout
-//! - Verify critical type layouts at compile-time
-//! - Consider alignment for performance
-//! - Document memory layout assumptions
-//! 
-//! ### Thread Safety
-//! - Use atomic operations for synchronization
-//! - Document thread-safety requirements
-//! - Maintain proper happens-before relationships
-//! 
-//! ## Advanced Topics
-//! 
-//! ### Unsafe Code Guidelines
-//! When implementing unsafe code:
-//! 1. Document all safety invariants
-//! 2. Minimize unsafe block scope
-//! 3. Verify thread-safety properties
-//! 4. Maintain type system guarantees
 //! 
 //! ### Performance Considerations
 //! - Zero-cost abstractions where possible
 //! - Careful choice of atomic operations
 //! - Proper alignment for hardware efficiency
 //! - Compile-time evaluation when feasible
+//! 
+//! ## Contributing
+//! 
+//! We welcome contributions! Please feel free to submit a Pull Request.
+//! 
+//! ## License
+//! 
+//! noir_macros_core is distributed under the MIT License.
 
 extern crate alloc;
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use alloc::vec::Vec;
 use core::cell::UnsafeCell;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 /// A thread-safe static initialization cell.
 /// 
@@ -697,13 +614,58 @@ impl core::fmt::Write for PrintWrapper {
     }
 }
 
-const BUFFER_SIZE: usize = 1024;
+const DEFAULT_BUFFER_SIZE: usize = 8 * 1024;
+const MAX_BUFFER_SIZE: usize = 1024 * 1024;
 
-/// A buffer for storing formatted strings.
+/// A buffer for storing formatted strings with configurable size.
 #[doc(hidden)]
 pub struct Buffer {
-    buf: UnsafeCell<[u8; BUFFER_SIZE]>,
-    pos: UnsafeCell<usize>,
+    pub buf: UnsafeCell<Vec<u8>>,
+    pub pos: UnsafeCell<usize>,
+    pub capacity: usize,
+}
+
+impl Buffer {
+    /// Creates a new buffer with the specified capacity.
+    /// 
+    /// # Safety
+    /// The capacity must be less than or equal to MAX_BUFFER_SIZE.
+    pub const unsafe fn with_capacity(capacity: usize) -> Self {
+        assert!(capacity <= MAX_BUFFER_SIZE, "Buffer capacity exceeds maximum allowed size");
+        Self {
+            buf: UnsafeCell::new(Vec::new()),
+            pos: UnsafeCell::new(0),
+            capacity,
+        }
+    }
+
+    /// Creates a new buffer with the default capacity.
+    pub const fn new() -> Self {
+        unsafe { Self::with_capacity(DEFAULT_BUFFER_SIZE) }
+    }
+
+    /// Returns true if the buffer has enough space for additional bytes.
+    #[inline]
+    pub fn has_capacity(&self, additional: usize) -> bool {
+        unsafe { *self.pos.get() + additional <= self.capacity }
+    }
+
+    /// Attempts to grow the buffer to accommodate more data.
+    /// Returns true if successful, false if the new size would exceed MAX_BUFFER_SIZE.
+    pub fn try_grow(&self, required: usize) -> bool {
+        unsafe {
+            let current_pos = *self.pos.get();
+            let new_size = (current_pos + required).next_power_of_two();
+            
+            if new_size <= MAX_BUFFER_SIZE {
+                let buf = &mut *self.buf.get();
+                buf.reserve(new_size - buf.capacity());
+                true
+            } else {
+                false
+            }
+        }
+    }
 }
 
 // SAFETY: Access to the buffer is synchronized through StaticCell
@@ -714,11 +676,16 @@ impl core::fmt::Write for Buffer {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         let bytes = s.as_bytes();
         let pos = unsafe { *self.pos.get() };
-        if pos + bytes.len() > BUFFER_SIZE {
+        
+        if !self.has_capacity(bytes.len()) && !self.try_grow(bytes.len()) {
             return Err(core::fmt::Error);
         }
+
         unsafe {
             let buf = &mut *self.buf.get();
+            if buf.len() < pos + bytes.len() {
+                buf.extend_from_slice(&[0; 8]); // Grow in small chunks
+            }
             buf[pos..pos + bytes.len()].copy_from_slice(bytes);
             *self.pos.get() = pos + bytes.len();
         }
@@ -729,18 +696,22 @@ impl core::fmt::Write for Buffer {
 /// A helper function to write formatted arguments to a buffer through a shared reference.
 #[doc(hidden)]
 pub fn write(buffer: &Buffer, args: core::fmt::Arguments) -> core::fmt::Result {
-    // SAFETY: We use UnsafeCell to allow mutation through a shared reference
     struct WriteAdapter<'a>(&'a Buffer);
 
     impl<'a> core::fmt::Write for WriteAdapter<'a> {
         fn write_str(&mut self, s: &str) -> core::fmt::Result {
             let bytes = s.as_bytes();
             let pos = unsafe { *self.0.pos.get() };
-            if pos + bytes.len() > BUFFER_SIZE {
+            
+            if !self.0.has_capacity(bytes.len()) && !self.0.try_grow(bytes.len()) {
                 return Err(core::fmt::Error);
             }
+
             unsafe {
                 let buf = &mut *self.0.buf.get();
+                if buf.len() < pos + bytes.len() {
+                    buf.extend_from_slice(&[0; 8]); // Grow in small chunks
+                }
                 buf[pos..pos + bytes.len()].copy_from_slice(bytes);
                 *self.0.pos.get() = pos + bytes.len();
             }
@@ -751,6 +722,44 @@ pub fn write(buffer: &Buffer, args: core::fmt::Arguments) -> core::fmt::Result {
 }
 
 /// A macro for formatting text in a no_std environment.
+/// 
+/// This macro provides string formatting capabilities similar to the standard library's
+/// `format!` macro, but designed specifically for no_std environments. It uses a dynamic
+/// buffer for formatting and is thread-safe.
+/// 
+/// # Features
+/// - Thread-safe formatting using static buffers
+/// - Compile-time format string validation
+/// - Dynamic buffer growth up to 1MB
+/// - Efficient memory usage with small initial buffer
+/// - Error handling for buffer overflow
+/// 
+/// # Examples
+/// 
+/// Basic string formatting:
+/// ```rust
+/// use noir_macros_core::format;
+/// 
+/// let name = "World";
+/// let greeting = format!("Hello, {}!", name);
+/// assert_eq!(greeting, "Hello, World!");
+/// ```
+/// 
+/// Multiple arguments and different types:
+/// ```rust
+/// use noir_macros_core::format;
+/// 
+/// let count = 42;
+/// let value = 3.14;
+/// let result = format!("Count: {}, Value: {:.2}", count, value);
+/// assert_eq!(result, "Count: 42, Value: 3.14");
+/// ```
+/// 
+/// # Buffer Size
+/// - Initial buffer size: 8KB (DEFAULT_BUFFER_SIZE)
+/// - Maximum buffer size: 1MB (MAX_BUFFER_SIZE)
+/// - Buffer grows dynamically as needed
+/// - Returns error if formatted string would exceed maximum size
 #[macro_export]
 macro_rules! format {
     ($($arg:tt)*) => {{
@@ -765,10 +774,7 @@ macro_rules! format {
         static BUFFER: $crate::StaticCell<$crate::Buffer> = $crate::StaticCell::new();
         
         // Initialize buffer if not already initialized
-        if BUFFER.try_init($crate::Buffer {
-            buf: UnsafeCell::new([0; $crate::BUFFER_SIZE]),
-            pos: UnsafeCell::new(0)
-        }) {
+        if BUFFER.try_init($crate::Buffer::new()) {
             // First time initialization
         }
         

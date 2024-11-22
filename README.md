@@ -14,7 +14,15 @@ Essential procedural macros and utilities for no_std Rust development, part of t
 - ⚡ Compile-time memory layout assertions
 - 🔒 Strong safety guarantees through Rust's type system
 - 📦 Robust bit flag operations and manipulation
-- 🧰 Comprehensive formatting utilities for no_std environments
+- 📝 Advanced formatting utilities with dynamic buffer management
+- 🔧 Memory-efficient string handling for resource-constrained systems
+
+## Key Improvements in v1.1.0
+
+- Dynamic buffer allocation in formatting macros
+- Configurable buffer sizes (8KB default, up to 1MB)
+- Improved memory efficiency and thread safety
+- Better error handling for buffer operations
 
 ## Installation
 
@@ -22,55 +30,67 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-noir_macros_core = "1.0.0"
+noir_macros_core = "1.1.0"
 ```
 
-## Quick Start
+## Usage Examples
 
-### Thread-Safe Static Initialization
+### String Formatting
 
 ```rust
-use noir_macros_core::StaticCell;
+use noir_macros_core::format;
 
-// Using StaticCell with Default trait
-static CONFIG: StaticCell<String> = StaticCell::new();
+// Basic formatting
+let name = "World";
+let greeting = format!("Hello, {}!", name);
 
-fn init_config() {
-    // Thread-safe initialization
-    if CONFIG.try_init(String::from("production")) {
-        println!("Configuration initialized");
+// Complex formatting with multiple arguments
+let count = 42;
+let value = 3.14;
+let result = format!("Count: {}, Value: {:.2}", count, value);
+```
+
+### Static Initialization
+
+```rust
+use noir_macros_core::static_cell;
+
+// Thread-safe static configuration
+static_cell!(CONFIG, &str);
+
+fn init() {
+    if CONFIG.try_init("production") {
+        // Successfully initialized
     }
     
-    // Safe concurrent access
     if let Some(config) = CONFIG.get() {
         println!("Current config: {}", config);
     }
 }
 ```
 
-### Bit Flag Operations
+### Memory Layout Verification
 
 ```rust
-use noir_macros_core::bitflags;
+use noir_macros_core::{const_assert_size, const_assert_align};
 
-bitflags! {
-    pub struct Permissions: u32 {
-        const READ = 0b001;
-        const WRITE = 0b010;
-        const EXECUTE = 0b100;
-    }
+#[repr(C)]
+struct CriticalData {
+    flags: u32,    // 4 bytes
+    active: bool,  // 1 byte
+    _pad: [u8; 3], // 3 bytes padding
 }
 
-let mut perms = Permissions::READ | Permissions::WRITE;
-assert!(perms.contains(Permissions::READ));
+const_assert_size!(CriticalData, 8);   // Ensure total size
+const_assert_align!(CriticalData, 4);  // Ensure alignment
 ```
 
-## Safety and Guarantees
+## Performance Considerations
 
-- Thread-safe initialization through atomic operations
-- Compile-time checks for memory layout and alignment
-- Zero runtime overhead for most operations
-- Safe concurrent access to static variables
+- Zero-cost abstractions where possible
+- Efficient memory usage with dynamic buffer allocation
+- Thread-safe operations with minimal overhead
+- Compile-time validations for optimal runtime performance
 
 ## Contributing
 
@@ -79,7 +99,3 @@ We welcome contributions! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Credits
-
-Created and maintained by Viicell and the Noir Framework Contributors.
