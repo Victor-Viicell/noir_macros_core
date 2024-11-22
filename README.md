@@ -33,7 +33,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-noir_macros_core = "1.1.2"
+noir_macros_core = "1.1.1"
 ```
 
 ## Usage Examples
